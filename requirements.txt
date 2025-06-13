@@ -1,0 +1,6 @@
+mitmproxy==10.2.2
+urwid<2.6
+requests
+pandas
+aiohttp
+fake_useragent

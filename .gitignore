@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.cursor/
+
+# Logs
+*.log
+logs/
+lenta_parser.log
+
+# Data files
+*.csv
+*.json
+*.xlsx
+*.xls
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Project specific
+.uvrc
+
+.pytest_cache/
+.coverage
+htmlcov/ 
