@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import aiohttp
 import asyncio
 import csv
@@ -6,7 +5,7 @@ from typing import List, Dict
 
 from logger import logger
 from config import (
-    DEFAULT_TIMEOUT, PAGE_LIMIT, DELAY_BETWEEN_REQUESTS, BASE_URL,
+    DELAY_BETWEEN_REQUESTS, BASE_URL,
     CATEGORY_BY_CITY, CITIES, STORE_IDS, REQUIRED_COLUMNS,
     CSV_ENCODING, CSV_NEWLINE, BRAND_ATTRIBUTE_ALIAS,
     BRAND_ATTRIBUTE_NAME, MIN_BRAND_LENGTH, API_HEADERS, PRODUCTS_PER_STORE
@@ -32,7 +31,7 @@ class CSVWriter:
                 writer.writerows(products[:100])
                 logger.info(f"Записано {len(products[:100])} строк данных в файл {self.filename}")
         
-        await asyncio.to_thread(write_to_csv)
+        await asyncio.to_thread(write_to_csv) # Запускает обычную (синхронную) функцию в отдельном потоке как если бы она была async.
         logger.info(f"Сохранили {len(products[:100])} товаров в {self.filename}")
 
 class LentaAPI:
@@ -42,10 +41,15 @@ class LentaAPI:
         self.session = None
 
     async def __aenter__(self):
+        """Создание сессии для запросов к API
+        Открывает сессию для запросов к API
+        Устанавливает нужные заголовки
+        """
         self.session = aiohttp.ClientSession(headers=self.headers)
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Закрытие сессии"""
         if self.session:
             await self.session.close()
 
@@ -60,6 +64,7 @@ class LentaAPI:
         name_parts = item.get("name", "").split()
         brand_parts = []
         
+        #экспериментальный алгоритм, который быстрее, чем запросы к API
         for i, part in enumerate(name_parts):
             if part.isupper() and len(part) > MIN_BRAND_LENGTH:
                 brand_parts.append(part)
@@ -72,41 +77,19 @@ class LentaAPI:
         
         return " ".join(brand_parts)
 
-    async def get_store(self) -> Dict:
-        """Получение информации о магазине"""
+    def get_store(self) -> Dict:
+        """Создание объекта магазина из конфигурации"""
         store_id = STORE_IDS[self.city]
-        url = f"{BASE_URL}/stores/pickup/search"
+        region_id = CITIES[self.city]
         
-        payload = {
-            "regionId": CITIES[self.city],
-            "searchQuery": str(store_id),
-            "limit": 100,  # Увеличиваем лимит для поиска
-            "page": 1,
-            "sort": {"order": "asc", "type": "distance"}
+        store = {
+            "id": store_id,
+            "regionId": region_id,
+            "title": f"Магазин Лента {self.city} (ID: {store_id})"
         }
         
-        logger.info(f"Запрос магазина {store_id} для города {self.city}")
-        
-        async with self.session.post(url, json=payload) as response:
-            if response.status != 200:
-                logger.error(f"Ошибка {response.status} при получении магазина для {self.city}")
-                return {}
-                
-            data = await response.json()
-            stores = data.get("items", [])
-            
-            if not stores:
-                logger.warning(f"Магазин {store_id} не найден для города {self.city}")
-                return {}
-            
-            # Ищем магазин с точным ID
-            for store in stores:
-                if store['id'] == store_id:
-                    logger.info(f"Найден магазин: {store['title']} (ID: {store['id']})")
-                    return store
-            
-            logger.warning(f"Магазин с ID {store_id} не найден в списке магазинов для города {self.city}")
-            return {}
+        logger.info(f"Создан объект магазина: {store['title']}")
+        return store
 
     async def get_products(self, store: Dict, category_id: int, total_needed: int = 20) -> List[Dict]:
         """Получение списка товаров"""
@@ -181,9 +164,9 @@ class LentaAPI:
 async def main():
     """Основная функция"""
     for city in CITIES:
-        try:
+        try: # что бы прога не упала, ошибка залогируеться а цыкл пойдёт дальше
             async with LentaAPI(city) as api:
-                store = await api.get_store()
+                store = api.get_store()
                 products = await api.get_products(store, CATEGORY_BY_CITY[city], total_needed=PRODUCTS_PER_STORE)
                 
                 # Используем CSVWriter для сохранения данных
